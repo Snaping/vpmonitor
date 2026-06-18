@@ -108,13 +108,21 @@ public partial class Form1 : Form
 
     private void BuildUI()
     {
+        Text = "虚拟机进程监控与资源限制工具";
+        Width = 1400;
+        Height = 900;
+        StartPosition = FormStartPosition.CenterScreen;
+        BackColor = Color.FromArgb(245, 245, 247);
+        Font = new Font("Arial", 9);
+
         var mainSplit = new SplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Vertical,
-            SplitterDistance = 1000,
-            FixedPanel = FixedPanel.Panel2,
-            BorderStyle = BorderStyle.None
+            SplitterDistance = 780,
+            FixedPanel = FixedPanel.None,
+            BorderStyle = BorderStyle.FixedSingle,
+            SplitterWidth = 6
         };
         Controls.Add(mainSplit);
 
@@ -131,10 +139,10 @@ public partial class Form1 : Form
             ColumnCount = 1,
             Padding = new Padding(10)
         };
-        leftPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 25f));
-        leftPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 25f));
-        leftPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 25f));
-        leftPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 25f));
+        leftPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 22f));
+        leftPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 22f));
+        leftPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 22f));
+        leftPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 34f));
         parent.Controls.Add(leftPanel);
 
         _cpuChart = CreateChart("CPU 使用率", "%", Color.FromArgb(52, 152, 219), 0, 100);
@@ -234,27 +242,71 @@ public partial class Form1 : Form
 
     private void BuildRightPanel(Control parent)
     {
-        var rightPanel = new TableLayoutPanel
+        var tabControl = new TabControl
         {
             Dock = DockStyle.Fill,
-            RowCount = 6,
-            ColumnCount = 1,
-            Padding = new Padding(5)
+            Font = new Font("Arial", 9, FontStyle.Bold),
+            Padding = new Point(15, 5)
         };
-        rightPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 130));
-        rightPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 210));
-        rightPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 170));
-        rightPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 130));
-        rightPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 180));
-        rightPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        parent.Controls.Add(rightPanel);
 
-        rightPanel.Controls.Add(BuildProcessStartPanel(), 0, 0);
-        rightPanel.Controls.Add(BuildProcessInfoPanel(), 0, 1);
-        rightPanel.Controls.Add(BuildChildProcessListPanel(), 0, 2);
-        rightPanel.Controls.Add(BuildThresholdPanel(), 0, 3);
-        rightPanel.Controls.Add(BuildStressTestPanel(), 0, 4);
-        rightPanel.Controls.Add(BuildLogPanel(), 0, 5);
+        var tabProcess = new TabPage("进程控制");
+        tabProcess.BackColor = Color.FromArgb(245, 245, 247);
+        var processPanel = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 3,
+            ColumnCount = 1,
+            Padding = new Padding(10)
+        };
+        processPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 140));
+        processPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 220));
+        processPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        processPanel.Controls.Add(BuildProcessStartPanel(), 0, 0);
+        processPanel.Controls.Add(BuildProcessInfoPanel(), 0, 1);
+        processPanel.Controls.Add(BuildChildProcessListPanel(), 0, 2);
+        tabProcess.Controls.Add(processPanel);
+        tabControl.TabPages.Add(tabProcess);
+
+        var tabThreshold = new TabPage("阈值设置");
+        tabThreshold.BackColor = Color.FromArgb(245, 245, 247);
+        var thresholdPanel = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 1,
+            ColumnCount = 1,
+            Padding = new Padding(10)
+        };
+        thresholdPanel.Controls.Add(BuildThresholdPanel(), 0, 0);
+        tabThreshold.Controls.Add(thresholdPanel);
+        tabControl.TabPages.Add(tabThreshold);
+
+        var tabStress = new TabPage("压力测试");
+        tabStress.BackColor = Color.FromArgb(245, 245, 247);
+        var stressPanel = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 1,
+            ColumnCount = 1,
+            Padding = new Padding(10)
+        };
+        stressPanel.Controls.Add(BuildStressTestPanel(), 0, 0);
+        tabStress.Controls.Add(stressPanel);
+        tabControl.TabPages.Add(tabStress);
+
+        var tabLog = new TabPage("事件日志");
+        tabLog.BackColor = Color.FromArgb(245, 245, 247);
+        var logPanel = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 1,
+            ColumnCount = 1,
+            Padding = new Padding(10)
+        };
+        logPanel.Controls.Add(BuildLogPanel(), 0, 0);
+        tabLog.Controls.Add(logPanel);
+        tabControl.TabPages.Add(tabLog);
+
+        parent.Controls.Add(tabControl);
     }
 
     private GroupBox BuildProcessStartPanel()
@@ -421,25 +473,30 @@ public partial class Form1 : Form
 
     private GroupBox BuildThresholdPanel()
     {
-        var groupBox = CreateGroupBox("阈值设置");
+        var groupBox = CreateGroupBox("CPU与内存阈值设置");
         var panel = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            RowCount = 4,
-            ColumnCount = 5,
-            Padding = new Padding(5)
+            RowCount = 9,
+            ColumnCount = 4,
+            Padding = new Padding(10)
         };
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70));
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 60));
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70));
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 60));
+        for (int i = 0; i < 9; i++)
+        {
+            panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        }
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
         _chkThresholdEnabled = new CheckBox
         {
-            Text = "启用阈值检测",
+            Text = "启用阈值检测与自动动作",
             Checked = true,
-            AutoSize = true
+            AutoSize = true,
+            Font = new Font("Arial", 10, FontStyle.Bold),
+            ForeColor = Color.FromArgb(52, 73, 94)
         };
         _chkThresholdEnabled.CheckedChanged += (s, e) =>
         {
@@ -447,34 +504,71 @@ public partial class Form1 : Form
                 _thresholdManager.Config.Enabled = _chkThresholdEnabled.Checked;
         };
         panel.Controls.Add(_chkThresholdEnabled, 0, 0);
-        panel.SetColumnSpan(_chkThresholdEnabled, 5);
+        panel.SetColumnSpan(_chkThresholdEnabled, 4);
 
-        panel.Controls.Add(new Label { Text = "CPU阈值:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 1);
-        _numCpuThreshold = new NumericUpDown { Minimum = 1, Maximum = 100, Value = 70, DecimalPlaces = 0, Width = 60 };
-        panel.Controls.Add(_numCpuThreshold, 1, 1);
-        panel.Controls.Add(new Label { Text = "% 持续:", AutoSize = true, Anchor = AnchorStyles.Left }, 2, 1);
-        _numCpuDuration = new NumericUpDown { Minimum = 1, Maximum = 300, Value = 10, DecimalPlaces = 0, Width = 60 };
-        panel.Controls.Add(_numCpuDuration, 3, 1);
-        _cmbCpuAction = new ComboBox { Width = 100, DropDownStyle = ComboBoxStyle.DropDownList };
-        _cmbCpuAction.Items.AddRange(new object[] { "无动作", "降低优先级", "挂起", "终止" });
+        var lblHint = new Label
+        {
+            Text = "当监控指标超出阈值并持续指定时间后，将自动执行预设动作",
+            AutoSize = true,
+            ForeColor = Color.Gray,
+            Font = new Font("Arial", 8, FontStyle.Italic)
+        };
+        panel.Controls.Add(lblHint, 0, 1);
+        panel.SetColumnSpan(lblHint, 4);
+
+        var lblCpuTitle = new Label
+        {
+            Text = "CPU 阈值设置",
+            AutoSize = true,
+            Font = new Font("Arial", 9, FontStyle.Bold),
+            ForeColor = Color.FromArgb(52, 152, 219)
+        };
+        panel.Controls.Add(lblCpuTitle, 0, 2);
+        panel.SetColumnSpan(lblCpuTitle, 4);
+
+        panel.Controls.Add(new Label { Text = "阈值:", AutoSize = true, Anchor = AnchorStyles.Left, TextAlign = ContentAlignment.MiddleLeft }, 0, 3);
+        _numCpuThreshold = new NumericUpDown { Minimum = 1, Maximum = 100, Value = 70, DecimalPlaces = 0, Width = 80, Anchor = AnchorStyles.Left };
+        panel.Controls.Add(_numCpuThreshold, 1, 3);
+        panel.Controls.Add(new Label { Text = "%   持续时间:", AutoSize = true, Anchor = AnchorStyles.Left, TextAlign = ContentAlignment.MiddleLeft }, 2, 3);
+        _numCpuDuration = new NumericUpDown { Minimum = 1, Maximum = 300, Value = 10, DecimalPlaces = 0, Width = 80, Anchor = AnchorStyles.Left };
+        panel.Controls.Add(_numCpuDuration, 3, 3);
+
+        panel.Controls.Add(new Label { Text = "超限时动作:", AutoSize = true, Anchor = AnchorStyles.Left, TextAlign = ContentAlignment.MiddleLeft }, 0, 4);
+        _cmbCpuAction = new ComboBox { Width = 180, DropDownStyle = ComboBoxStyle.DropDownList, Anchor = AnchorStyles.Left };
+        _cmbCpuAction.Items.AddRange(new object[] { "无动作 - 仅记录日志", "降低进程优先级", "挂起进程", "终止进程" });
         _cmbCpuAction.SelectedIndex = 1;
-        panel.Controls.Add(_cmbCpuAction, 4, 1);
+        panel.Controls.Add(_cmbCpuAction, 1, 4);
+        panel.SetColumnSpan(_cmbCpuAction, 3);
 
-        panel.Controls.Add(new Label { Text = "内存阈值:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 2);
-        _numMemoryThreshold = new NumericUpDown { Minimum = 1, Maximum = 16384, Value = 1024, DecimalPlaces = 0, Width = 60 };
-        panel.Controls.Add(_numMemoryThreshold, 1, 2);
-        panel.Controls.Add(new Label { Text = "MB 持续:", AutoSize = true, Anchor = AnchorStyles.Left }, 2, 2);
-        _numMemoryDuration = new NumericUpDown { Minimum = 1, Maximum = 300, Value = 10, DecimalPlaces = 0, Width = 60 };
-        panel.Controls.Add(_numMemoryDuration, 3, 2);
-        _cmbMemoryAction = new ComboBox { Width = 100, DropDownStyle = ComboBoxStyle.DropDownList };
-        _cmbMemoryAction.Items.AddRange(new object[] { "无动作", "降低优先级", "挂起", "终止" });
+        var lblMemTitle = new Label
+        {
+            Text = "内存阈值设置",
+            AutoSize = true,
+            Font = new Font("Arial", 9, FontStyle.Bold),
+            ForeColor = Color.FromArgb(46, 204, 113)
+        };
+        panel.Controls.Add(lblMemTitle, 0, 5);
+        panel.SetColumnSpan(lblMemTitle, 4);
+
+        panel.Controls.Add(new Label { Text = "阈值:", AutoSize = true, Anchor = AnchorStyles.Left, TextAlign = ContentAlignment.MiddleLeft }, 0, 6);
+        _numMemoryThreshold = new NumericUpDown { Minimum = 1, Maximum = 65536, Value = 1024, DecimalPlaces = 0, Width = 80, Anchor = AnchorStyles.Left };
+        panel.Controls.Add(_numMemoryThreshold, 1, 6);
+        panel.Controls.Add(new Label { Text = "MB  持续时间:", AutoSize = true, Anchor = AnchorStyles.Left, TextAlign = ContentAlignment.MiddleLeft }, 2, 6);
+        _numMemoryDuration = new NumericUpDown { Minimum = 1, Maximum = 300, Value = 10, DecimalPlaces = 0, Width = 80, Anchor = AnchorStyles.Left };
+        panel.Controls.Add(_numMemoryDuration, 3, 6);
+
+        panel.Controls.Add(new Label { Text = "超限时动作:", AutoSize = true, Anchor = AnchorStyles.Left, TextAlign = ContentAlignment.MiddleLeft }, 0, 7);
+        _cmbMemoryAction = new ComboBox { Width = 180, DropDownStyle = ComboBoxStyle.DropDownList, Anchor = AnchorStyles.Left };
+        _cmbMemoryAction.Items.AddRange(new object[] { "无动作 - 仅记录日志", "降低进程优先级", "挂起进程", "终止进程" });
         _cmbMemoryAction.SelectedIndex = 1;
-        panel.Controls.Add(_cmbMemoryAction, 4, 2);
+        panel.Controls.Add(_cmbMemoryAction, 1, 7);
+        panel.SetColumnSpan(_cmbMemoryAction, 3);
 
-        var btnApply = CreateButton("应用设置", Color.FromArgb(52, 152, 219));
+        var btnApply = CreateButton("应用阈值设置", Color.FromArgb(52, 152, 219));
+        btnApply.Height = 35;
         btnApply.Click += BtnApplyThreshold_Click;
-        panel.Controls.Add(btnApply, 0, 3);
-        panel.SetColumnSpan(btnApply, 5);
+        panel.Controls.Add(btnApply, 0, 8);
+        panel.SetColumnSpan(btnApply, 4);
 
         groupBox.Controls.Add(panel);
         return groupBox;

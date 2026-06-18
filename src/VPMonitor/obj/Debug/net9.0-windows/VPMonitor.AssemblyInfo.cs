@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("VPMonitor")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a01a121dcb9a34e85a2f016dd88723fc83ada408")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+62710377c4f18a8e3e8a7b20310a7e599ce7cb95")]
 [assembly: System.Reflection.AssemblyProductAttribute("VPMonitor")]
 [assembly: System.Reflection.AssemblyTitleAttribute("VPMonitor")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("VPMonitor.TestProcess")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3d084e864837a408990933c8506a99690b9ef460")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+62710377c4f18a8e3e8a7b20310a7e599ce7cb95")]
 [assembly: System.Reflection.AssemblyProductAttribute("VPMonitor.TestProcess")]
 [assembly: System.Reflection.AssemblyTitleAttribute("VPMonitor.TestProcess")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
