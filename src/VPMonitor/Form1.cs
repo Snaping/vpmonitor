@@ -322,10 +322,10 @@ public partial class Form1 : Form
         panel.SetColumnSpan(_chkThresholdEnabled, 5);
 
         panel.Controls.Add(new Label { Text = "CPU阈值:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 1);
-        _numCpuThreshold = new NumericUpDown { Value = 70, Minimum = 1, Maximum = 100, DecimalPlaces = 0, Width = 60 };
+        _numCpuThreshold = new NumericUpDown { Minimum = 1, Maximum = 100, Value = 70, DecimalPlaces = 0, Width = 60 };
         panel.Controls.Add(_numCpuThreshold, 1, 1);
         panel.Controls.Add(new Label { Text = "% 持续:", AutoSize = true, Anchor = AnchorStyles.Left }, 2, 1);
-        _numCpuDuration = new NumericUpDown { Value = 10, Minimum = 1, Maximum = 300, DecimalPlaces = 0, Width = 60 };
+        _numCpuDuration = new NumericUpDown { Minimum = 1, Maximum = 300, Value = 10, DecimalPlaces = 0, Width = 60 };
         panel.Controls.Add(_numCpuDuration, 3, 1);
         _cmbCpuAction = new ComboBox { Width = 100, DropDownStyle = ComboBoxStyle.DropDownList };
         _cmbCpuAction.Items.AddRange(new object[] { "无动作", "降低优先级", "挂起", "终止" });
@@ -333,10 +333,10 @@ public partial class Form1 : Form
         panel.Controls.Add(_cmbCpuAction, 4, 1);
 
         panel.Controls.Add(new Label { Text = "内存阈值:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 2);
-        _numMemoryThreshold = new NumericUpDown { Value = 1024, Minimum = 1, Maximum = 16384, DecimalPlaces = 0, Width = 60 };
+        _numMemoryThreshold = new NumericUpDown { Minimum = 1, Maximum = 16384, Value = 1024, DecimalPlaces = 0, Width = 60 };
         panel.Controls.Add(_numMemoryThreshold, 1, 2);
         panel.Controls.Add(new Label { Text = "MB 持续:", AutoSize = true, Anchor = AnchorStyles.Left }, 2, 2);
-        _numMemoryDuration = new NumericUpDown { Value = 10, Minimum = 1, Maximum = 300, DecimalPlaces = 0, Width = 60 };
+        _numMemoryDuration = new NumericUpDown { Minimum = 1, Maximum = 300, Value = 10, DecimalPlaces = 0, Width = 60 };
         panel.Controls.Add(_numMemoryDuration, 3, 2);
         _cmbMemoryAction = new ComboBox { Width = 100, DropDownStyle = ComboBoxStyle.DropDownList };
         _cmbMemoryAction.Items.AddRange(new object[] { "无动作", "降低优先级", "挂起", "终止" });
@@ -379,7 +379,7 @@ public partial class Form1 : Form
         panel.Controls.Add(_btnStopSelfStress, 1, 1);
 
         panel.Controls.Add(new Label { Text = "压力等级:", AutoSize = true, Anchor = AnchorStyles.Right }, 2, 1);
-        _numSelfStressLevel = new NumericUpDown { Value = 70, Minimum = 10, Maximum = 100, DecimalPlaces = 0, Dock = DockStyle.Fill };
+        _numSelfStressLevel = new NumericUpDown { Minimum = 10, Maximum = 100, Value = 70, DecimalPlaces = 0, Dock = DockStyle.Fill };
         panel.Controls.Add(_numSelfStressLevel, 3, 1);
 
         _btnAllocateMemory = CreateButton("分配内存", Color.FromArgb(155, 89, 182));
@@ -388,7 +388,7 @@ public partial class Form1 : Form
         panel.SetColumnSpan(_btnAllocateMemory, 2);
 
         panel.Controls.Add(new Label { Text = "大小(MB):", AutoSize = true, Anchor = AnchorStyles.Right }, 2, 2);
-        _numAllocateMB = new NumericUpDown { Value = 256, Minimum = 10, Maximum = 2048, DecimalPlaces = 0, Dock = DockStyle.Fill };
+        _numAllocateMB = new NumericUpDown { Minimum = 10, Maximum = 2048, Value = 256, DecimalPlaces = 0, Dock = DockStyle.Fill };
         panel.Controls.Add(_numAllocateMB, 3, 2);
 
         var btnFreeMemory = CreateButton("释放内存", Color.FromArgb(52, 152, 219));
