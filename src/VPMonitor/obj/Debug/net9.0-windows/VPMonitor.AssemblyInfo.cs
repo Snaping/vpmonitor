@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("VPMonitor")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f668da6bc7526e1f96b50430966bd966a95a05a8")]
 [assembly: System.Reflection.AssemblyProductAttribute("VPMonitor")]
 [assembly: System.Reflection.AssemblyTitleAttribute("VPMonitor")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

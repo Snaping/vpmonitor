@@ -1,8 +1,3 @@
-D:\WorkSpace\Agent\MultiSoloSpace\617\vpmonitor\src\VPMonitor\obj\Debug\net9.0-windows\VPMonitor.csproj.AssemblyReference.cache
-D:\WorkSpace\Agent\MultiSoloSpace\617\vpmonitor\src\VPMonitor\obj\Debug\net9.0-windows\VPMonitor.GeneratedMSBuildEditorConfig.editorconfig
-D:\WorkSpace\Agent\MultiSoloSpace\617\vpmonitor\src\VPMonitor\obj\Debug\net9.0-windows\VPMonitor.AssemblyInfoInputs.cache
-D:\WorkSpace\Agent\MultiSoloSpace\617\vpmonitor\src\VPMonitor\obj\Debug\net9.0-windows\VPMonitor.AssemblyInfo.cs
-D:\WorkSpace\Agent\MultiSoloSpace\617\vpmonitor\src\VPMonitor\obj\Debug\net9.0-windows\VPMonitor.csproj.CoreCompileInputs.cache
 D:\WorkSpace\Agent\MultiSoloSpace\617\vpmonitor\src\VPMonitor\bin\Debug\net9.0-windows\VPMonitor.exe
 D:\WorkSpace\Agent\MultiSoloSpace\617\vpmonitor\src\VPMonitor\bin\Debug\net9.0-windows\VPMonitor.deps.json
 D:\WorkSpace\Agent\MultiSoloSpace\617\vpmonitor\src\VPMonitor\bin\Debug\net9.0-windows\VPMonitor.runtimeconfig.json
@@ -11,6 +6,12 @@ D:\WorkSpace\Agent\MultiSoloSpace\617\vpmonitor\src\VPMonitor\bin\Debug\net9.0-w
 D:\WorkSpace\Agent\MultiSoloSpace\617\vpmonitor\src\VPMonitor\bin\Debug\net9.0-windows\Newtonsoft.Json.dll
 D:\WorkSpace\Agent\MultiSoloSpace\617\vpmonitor\src\VPMonitor\bin\Debug\net9.0-windows\System.Management.dll
 D:\WorkSpace\Agent\MultiSoloSpace\617\vpmonitor\src\VPMonitor\bin\Debug\net9.0-windows\runtimes\win\lib\net9.0\System.Management.dll
+D:\WorkSpace\Agent\MultiSoloSpace\617\vpmonitor\src\VPMonitor\obj\Debug\net9.0-windows\VPMonitor.csproj.AssemblyReference.cache
+D:\WorkSpace\Agent\MultiSoloSpace\617\vpmonitor\src\VPMonitor\obj\Debug\net9.0-windows\VPMonitor.GeneratedMSBuildEditorConfig.editorconfig
+D:\WorkSpace\Agent\MultiSoloSpace\617\vpmonitor\src\VPMonitor\obj\Debug\net9.0-windows\VPMonitor.AssemblyInfoInputs.cache
+D:\WorkSpace\Agent\MultiSoloSpace\617\vpmonitor\src\VPMonitor\obj\Debug\net9.0-windows\VPMonitor.AssemblyInfo.cs
+D:\WorkSpace\Agent\MultiSoloSpace\617\vpmonitor\src\VPMonitor\obj\Debug\net9.0-windows\VPMonitor.csproj.CoreCompileInputs.cache
+D:\WorkSpace\Agent\MultiSoloSpace\617\vpmonitor\src\VPMonitor\obj\Debug\net9.0-windows\VPMonitor.sourcelink.json
 D:\WorkSpace\Agent\MultiSoloSpace\617\vpmonitor\src\VPMonitor\obj\Debug\net9.0-windows\VPMonitor.csproj.Up2Date
 D:\WorkSpace\Agent\MultiSoloSpace\617\vpmonitor\src\VPMonitor\obj\Debug\net9.0-windows\VPMonitor.dll
 D:\WorkSpace\Agent\MultiSoloSpace\617\vpmonitor\src\VPMonitor\obj\Debug\net9.0-windows\refint\VPMonitor.dll

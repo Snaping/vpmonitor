@@ -54,10 +54,6 @@
             "Newtonsoft.Json": {
               "target": "Package",
               "version": "[13.0.3, )"
-            },
-            "System.IO.Pipes": {
-              "target": "Package",
-              "version": "[4.3.0, )"
             }
           },
           "imports": [

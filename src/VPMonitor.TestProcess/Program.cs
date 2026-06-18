@@ -1,429 +1,389 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.IO.Pipes;
-using System.Text;
-using System.Threading;
+﻿using System.Diagnostics;
 using Newtonsoft.Json;
+using VPMonitor.TestProcess.Models;
+using VPMonitor.TestProcess.Services;
 
 namespace VPMonitor.TestProcess;
 
 class Program
 {
-    private static string _pipeName = "VPMonitor_TestProcess";
-    private static volatile bool _cpuStressRunning;
-    private static volatile bool _memoryStressRunning;
-    private static volatile bool _diskActivityRunning;
-    private static Thread? _cpuThread;
-    private static Thread? _memoryThread;
-    private static Thread? _diskThread;
-    private static List<byte[]>? _allocatedMemory;
-    private static int _cpuLoadLevel = 70;
-    private static int _memorySizeMb = 200;
-    private static readonly List<Process> _childProcesses = new();
-    private static int _currentProcessId;
-    private static readonly ManualResetEvent _exitEvent = new(false);
+    private static IpcClient? _ipcClient;
+    private static volatile bool _highLoadRunning = false;
+    private static Thread? _highLoadThread;
+    private static int _loadLevel = 50;
+    private static readonly List<byte[]> _allocatedMemory = new();
+    private static readonly List<Thread> _workerThreads = new();
+    private static readonly object _lockObject = new();
+    private static int _processId;
+    private static string _pipeName = "VPMonitor_IPC_Pipe";
+    private static readonly CancellationTokenSource _cts = new();
 
     static async Task Main(string[] args)
     {
-        _currentProcessId = Process.GetCurrentProcess().Id;
+        _processId = Process.GetCurrentProcess().Id;
 
         if (args.Length > 0)
         {
             _pipeName = args[0];
         }
 
-        Console.Title = $"VPTestProcess (PID: {_currentProcessId})";
-        Console.WriteLine($"[VPTestProcess] Started, PID: {_currentProcessId}");
-        Console.WriteLine($"[VPTestProcess] Pipe: {_pipeName}");
-        Console.WriteLine($"[VPTestProcess] Waiting for commands...");
-        Console.WriteLine();
+        Console.WriteLine($"Test Process started. PID: {_processId}");
+        Console.WriteLine($"Waiting for IPC connection on pipe: {_pipeName}");
 
-        var serverTask = RunIpcServer();
+        _ipcClient = new IpcClient(_pipeName);
+        _ipcClient.MessageReceived += OnMessageReceived;
 
-        await Task.WhenAny(serverTask, Task.Run(() => _exitEvent.WaitOne()));
-
-        StopAllStress();
-        foreach (var child in _childProcesses)
+        var connected = false;
+        for (int i = 0; i < 5 && !connected; i++)
         {
-            try { if (!child.HasExited) child.Kill(); }
-            catch { }
-        }
-
-        Console.WriteLine("[VPTestProcess] Exited");
-    }
-
-    private static async Task RunIpcServer()
-    {
-        while (!_exitEvent.WaitOne(0))
-        {
-            try
+            connected = await _ipcClient.ConnectAsync(3000);
+            if (!connected)
             {
-                using var pipeServer = new NamedPipeServerStream(
-                    _pipeName,
-                    PipeDirection.InOut,
-                    1,
-                    PipeTransmissionMode.Byte,
-                    PipeOptions.Asynchronous);
-
-                Console.WriteLine("[IPC] Waiting for connection...");
-                await pipeServer.WaitForConnectionAsync();
-                Console.WriteLine("[IPC] Client connected");
-
-                using var reader = new StreamReader(pipeServer, Encoding.UTF8);
-                using var writer = new StreamWriter(pipeServer, Encoding.UTF8) { AutoFlush = true };
-
-                while (pipeServer.IsConnected && !_exitEvent.WaitOne(0))
-                {
-                    try
-                    {
-                        var messageJson = await reader.ReadLineAsync();
-                        if (messageJson == null) break;
-
-                        var message = JsonConvert.DeserializeObject<IpcMessage>(messageJson);
-                        if (message == null) continue;
-
-                        var response = HandleCommand(message);
-                        response.RequestId = message.RequestId;
-
-                        var responseJson = JsonConvert.SerializeObject(response);
-                        await writer.WriteLineAsync(responseJson);
-
-                        if (message.Command == IpcCommands.Exit)
-                        {
-                            _exitEvent.Set();
-                            break;
-                        }
-                    }
-                    catch (IOException)
-                    {
-                        Console.WriteLine("[IPC] Client disconnected");
-                        break;
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"[IPC] Error: {ex.Message}");
-                        break;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[IPC] Server error: {ex.Message}");
+                Console.WriteLine($"Connection attempt {i + 1} failed, retrying...");
                 await Task.Delay(1000);
             }
         }
-    }
 
-    private static IpcResponse HandleCommand(IpcMessage message)
-    {
-        Console.WriteLine($"[CMD] Received: {message.Command}");
-
-        switch (message.Command)
+        if (!connected)
         {
-            case IpcCommands.Ping:
-                return new IpcResponse { Success = true, Message = "PONG" };
-
-            case IpcCommands.GetStatus:
-                return GetStatusResponse();
-
-            case IpcCommands.StartHighCpu:
-                if (message.Parameters.TryGetValue("LoadLevel", out var loadStr)
-                    && int.TryParse(loadStr, out var load))
-                {
-                    _cpuLoadLevel = Math.Clamp(load, 10, 100);
-                }
-                StartCpuStress();
-                return new IpcResponse { Success = true, Message = "CPU stress started" };
-
-            case IpcCommands.StartHighMemory:
-                if (message.Parameters.TryGetValue("SizeMb", out var sizeStr)
-                    && int.TryParse(sizeStr, out var size))
-                {
-                    _memorySizeMb = Math.Clamp(size, 10, 2048);
-                }
-                StartMemoryStress();
-                return new IpcResponse { Success = true, Message = "Memory stress started" };
-
-            case IpcCommands.StartDiskActivity:
-                StartDiskActivity();
-                return new IpcResponse { Success = true, Message = "Disk activity started" };
-
-            case IpcCommands.StopAll:
-                StopAllStress();
-                return new IpcResponse { Success = true, Message = "All stress stopped" };
-
-            case IpcCommands.CreateChildProcess:
-                CreateChildProcess();
-                return new IpcResponse
-                {
-                    Success = true,
-                    Message = "Child process created",
-                    Data = new Dictionary<string, string>
-                    {
-                        ["ChildCount"] = _childProcesses.Count.ToString()
-                    }
-                };
-
-            case IpcCommands.Crash:
-                Console.WriteLine("[CRASH] Crashing on purpose...");
-                Task.Run(() => throw new InvalidOperationException("Test crash"));
-                return new IpcResponse { Success = true, Message = "Crash initiated" };
-
-            case IpcCommands.Hang:
-                Console.WriteLine("[HANG] Hanging on purpose...");
-                Thread.Sleep(Timeout.Infinite);
-                return new IpcResponse { Success = true, Message = "Hang initiated" };
-
-            case IpcCommands.Exit:
-                Console.WriteLine("[EXIT] Exit requested");
-                return new IpcResponse { Success = true, Message = "Exiting" };
-
-            default:
-                return new IpcResponse { Success = false, Message = "Unknown command" };
+            Console.WriteLine("Failed to connect to IPC server. Exiting...");
+            return;
         }
-    }
 
-    private static IpcResponse GetStatusResponse()
-    {
-        var process = Process.GetCurrentProcess();
-        _childProcesses.RemoveAll(p => p.HasExited);
+        Console.WriteLine("Connected to monitor. Waiting for commands...");
 
-        var status = new TestProcessStatus
+        await SendStatus();
+
+        while (!_cts.IsCancellationRequested && _ipcClient.IsConnected)
         {
-            IsHighCpuRunning = _cpuStressRunning,
-            IsHighMemoryRunning = _memoryStressRunning,
-            IsDiskActivityRunning = _diskActivityRunning,
-            CpuLoadLevel = _cpuStressRunning ? _cpuLoadLevel : 0,
-            MemoryAllocatedBytes = _allocatedMemory?.Count * 10 * 1024 * 1024L ?? 0,
-            ChildProcessCount = _childProcesses.Count,
-            ThreadCount = process.Threads.Count
-        };
-
-        return new IpcResponse
-        {
-            Success = true,
-            Message = "OK",
-            Data = new Dictionary<string, string>
-            {
-                ["IsHighCpuRunning"] = status.IsHighCpuRunning.ToString(),
-                ["IsHighMemoryRunning"] = status.IsHighMemoryRunning.ToString(),
-                ["IsDiskActivityRunning"] = status.IsDiskActivityRunning.ToString(),
-                ["CpuLoadLevel"] = status.CpuLoadLevel.ToString(),
-                ["MemoryAllocatedBytes"] = status.MemoryAllocatedBytes.ToString(),
-                ["ChildProcessCount"] = status.ChildProcessCount.ToString(),
-                ["ThreadCount"] = status.ThreadCount.ToString(),
-                ["HandleCount"] = process.HandleCount.ToString(),
-                ["WorkingSetMb"] = (process.WorkingSet64 / (1024 * 1024)).ToString()
-            }
-        };
-    }
-
-    private static void StartCpuStress()
-    {
-        if (_cpuStressRunning) return;
-
-        _cpuStressRunning = true;
-        _cpuThread = new Thread(CpuStressLoop)
-        {
-            Priority = ThreadPriority.Normal,
-            IsBackground = true
-        };
-        _cpuThread.Start();
-        Console.WriteLine($"[STRESS] CPU stress started (target: {_cpuLoadLevel}%)");
-    }
-
-    private static void CpuStressLoop()
-    {
-        while (_cpuStressRunning)
-        {
-            var load = _cpuLoadLevel;
-            var busyTime = load;
-            var idleTime = 100 - load;
-
-            var endTime = DateTime.Now.AddMilliseconds(busyTime);
-            while (DateTime.Now < endTime && _cpuStressRunning)
-            {
-                var a = 0;
-                for (var i = 0; i < 10000; i++)
-                {
-                    a += i;
-                }
-            }
-
-            if (idleTime > 0)
-            {
-                Thread.Sleep(idleTime);
-            }
+            await Task.Delay(1000);
         }
+
+        Cleanup();
+        Console.WriteLine("Test Process exiting.");
     }
 
-    private static void StartMemoryStress()
+    private static async void OnMessageReceived(object? sender, IpcMessage e)
     {
-        if (_memoryStressRunning) return;
+        Console.WriteLine($"Received command: {e.Command}");
 
-        _memoryStressRunning = true;
-        _allocatedMemory = new List<byte[]>();
-        _memoryThread = new Thread(MemoryStressLoop)
-        {
-            IsBackground = true
-        };
-        _memoryThread.Start();
-        Console.WriteLine($"[STRESS] Memory stress started (target: {_memorySizeMb}MB)");
-    }
-
-    private static void MemoryStressLoop()
-    {
         try
         {
-            const int blockSize = 10 * 1024 * 1024;
-            int totalBlocks = _memorySizeMb / 10;
-            int allocatedBlocks = 0;
-
-            while (_memoryStressRunning && allocatedBlocks < totalBlocks)
+            switch (e.Command)
             {
-                try
-                {
-                    var block = new byte[blockSize];
-                    for (int i = 0; i < blockSize; i += 4096)
+                case IpcCommandType.Ping:
+                    await SendMessage(new IpcMessage
                     {
-                        block[i] = 0xAA;
-                    }
-                    _allocatedMemory?.Add(block);
-                    allocatedBlocks++;
-                    Thread.Sleep(50);
-                }
-                catch (OutOfMemoryException)
-                {
-                    Console.WriteLine("[STRESS] Out of memory!");
+                        Command = IpcCommandType.StatusResponse,
+                        Payload = "Pong"
+                    });
                     break;
-                }
-            }
 
-            while (_memoryStressRunning)
-            {
-                if (_allocatedMemory != null)
-                {
-                    foreach (var block in _allocatedMemory)
+                case IpcCommandType.GetStatus:
+                    await SendStatus();
+                    break;
+
+                case IpcCommandType.StartHighLoad:
+                    StartHighLoad();
+                    await SendStatus();
+                    break;
+
+                case IpcCommandType.StopHighLoad:
+                    StopHighLoad();
+                    await SendStatus();
+                    break;
+
+                case IpcCommandType.SetLoadLevel:
+                    if (int.TryParse(e.Payload, out var level))
                     {
-                        for (int i = 0; i < block.Length; i += 4096)
-                        {
-                            block[i] = (byte)(block[i] + 1);
-                        }
+                        _loadLevel = Math.Clamp(level, 10, 100);
+                    }
+                    await SendStatus();
+                    break;
+
+                case IpcCommandType.AllocateMemory:
+                    if (int.TryParse(e.Payload, out var sizeMB))
+                    {
+                        AllocateMemory(sizeMB);
+                    }
+                    await SendStatus();
+                    break;
+
+                case IpcCommandType.FreeMemory:
+                    FreeMemory();
+                    await SendStatus();
+                    break;
+
+                case IpcCommandType.CreateThreads:
+                    if (int.TryParse(e.Payload, out var threadCount))
+                    {
+                        CreateWorkerThreads(threadCount);
+                    }
+                    await SendStatus();
+                    break;
+
+                case IpcCommandType.CriticalStateTest:
+                    RunCriticalStateTests();
+                    await SendStatus();
+                    break;
+
+                case IpcCommandType.ExitProcess:
+                    await SendMessage(new IpcMessage
+                    {
+                        Command = IpcCommandType.StatusResponse,
+                        Payload = "Exiting"
+                    });
+                    _cts.Cancel();
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error processing command: {ex.Message}");
+            await SendMessage(new IpcMessage
+            {
+                Command = IpcCommandType.Error,
+                Payload = ex.Message
+            });
+        }
+    }
+
+    private static void StartHighLoad()
+    {
+        if (_highLoadRunning) return;
+
+        _highLoadRunning = true;
+        _highLoadThread = new Thread(HighLoadLoop)
+        {
+            Priority = ThreadPriority.Highest,
+            IsBackground = true
+        };
+        _highLoadThread.Start();
+        Console.WriteLine("High load started");
+    }
+
+    private static void StopHighLoad()
+    {
+        _highLoadRunning = false;
+        _highLoadThread?.Join(1000);
+        _highLoadThread = null;
+        Console.WriteLine("High load stopped");
+    }
+
+    private static void HighLoadLoop()
+    {
+        var cpuCount = Environment.ProcessorCount;
+        var threads = new Thread[cpuCount];
+
+        for (int i = 0; i < cpuCount; i++)
+        {
+            threads[i] = new Thread(() =>
+            {
+                var random = new Random();
+                while (_highLoadRunning)
+                {
+                    var workTime = (int)(_loadLevel * 10);
+                    var sleepTime = 1000 - workTime;
+
+                    var endTime = DateTime.Now.AddMilliseconds(workTime);
+                    while (DateTime.Now < endTime && _highLoadRunning)
+                    {
+                        var a = random.NextDouble();
+                        var b = random.NextDouble();
+                        var c = Math.Sqrt(a * a + b * b);
+                    }
+
+                    if (sleepTime > 0 && _highLoadRunning)
+                    {
+                        Thread.Sleep(sleepTime);
                     }
                 }
+            })
+            {
+                Priority = ThreadPriority.Highest,
+                IsBackground = true
+            };
+            threads[i].Start();
+        }
+
+        foreach (var thread in threads)
+        {
+            thread.Join();
+        }
+    }
+
+    private static void AllocateMemory(int sizeMB)
+    {
+        if (sizeMB <= 0) return;
+
+        try
+        {
+            lock (_lockObject)
+            {
+                var bytes = new byte[sizeMB * 1024 * 1024];
+                for (int i = 0; i < bytes.Length; i += 4096)
+                {
+                    bytes[i] = 0xAA;
+                }
+                _allocatedMemory.Add(bytes);
+                Console.WriteLine($"Allocated {sizeMB}MB memory");
+            }
+        }
+        catch (OutOfMemoryException)
+        {
+            Console.WriteLine("Out of memory!");
+        }
+    }
+
+    private static void FreeMemory()
+    {
+        lock (_lockObject)
+        {
+            _allocatedMemory.Clear();
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+            Console.WriteLine("Memory freed");
+        }
+    }
+
+    private static void CreateWorkerThreads(int count)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            var thread = new Thread(() =>
+            {
+                while (!_cts.IsCancellationRequested)
+                {
+                    Thread.Sleep(1000);
+                }
+            })
+            {
+                IsBackground = true
+            };
+            thread.Start();
+            _workerThreads.Add(thread);
+        }
+        Console.WriteLine($"Created {count} worker threads");
+    }
+
+    private static void RunCriticalStateTests()
+    {
+        Console.WriteLine("Running critical state tests...");
+
+        var tests = new List<string>();
+
+        try
+        {
+            tests.Add("Test 1: High thread count creation");
+            CreateWorkerThreads(50);
+        }
+        catch (Exception ex)
+        {
+            tests.Add($"Test 1 Failed: {ex.Message}");
+        }
+
+        try
+        {
+            tests.Add("Test 2: Large memory allocation attempt");
+            try
+            {
+                AllocateMemory(512);
+                tests.Add("Test 2 Passed: Allocated 512MB");
+            }
+            catch (OutOfMemoryException)
+            {
+                tests.Add("Test 2 Passed: Expected OutOfMemoryException (boundary reached)");
+            }
+        }
+        catch (Exception ex)
+        {
+            tests.Add($"Test 2 Failed: {ex.Message}");
+        }
+
+        try
+        {
+            tests.Add("Test 3: CPU stress spike");
+            StartHighLoad();
+            Thread.Sleep(3000);
+            StopHighLoad();
+            tests.Add("Test 3 Passed: CPU stress test completed");
+        }
+        catch (Exception ex)
+        {
+            tests.Add($"Test 3 Failed: {ex.Message}");
+        }
+
+        try
+        {
+            tests.Add("Test 4: Rapid memory allocate/free cycles");
+            for (int i = 0; i < 10; i++)
+            {
+                AllocateMemory(10);
+                Thread.Sleep(100);
+                FreeMemory();
                 Thread.Sleep(100);
             }
+            tests.Add("Test 4 Passed: Rapid memory cycles completed");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[STRESS] Memory error: {ex.Message}");
+            tests.Add($"Test 4 Failed: {ex.Message}");
+        }
+
+        Console.WriteLine("Critical state tests completed");
+        foreach (var test in tests)
+        {
+            Console.WriteLine($"  {test}");
         }
     }
 
-    private static void StartDiskActivity()
+    private static async Task SendStatus()
     {
-        if (_diskActivityRunning) return;
-
-        _diskActivityRunning = true;
-        _diskThread = new Thread(DiskActivityLoop)
+        var status = new TestProcessStatus
         {
-            IsBackground = true
+            ProcessId = _processId,
+            MemoryUsedMB = GetAllocatedMemoryMB(),
+            ThreadCount = Process.GetCurrentProcess().Threads.Count,
+            IsHighLoadRunning = _highLoadRunning,
+            LoadLevel = _loadLevel,
+            Status = _cts.IsCancellationRequested ? "Exiting" : "Running"
         };
-        _diskThread.Start();
-        Console.WriteLine("[STRESS] Disk activity started");
+
+        await SendMessage(new IpcMessage
+        {
+            Command = IpcCommandType.StatusResponse,
+            Payload = JsonConvert.SerializeObject(status)
+        });
     }
 
-    private static void DiskActivityLoop()
+    private static double GetAllocatedMemoryMB()
     {
-        var tempFile = Path.GetTempFileName();
-        var buffer = new byte[4096];
-        var random = new Random();
-
-        try
+        lock (_lockObject)
         {
-            while (_diskActivityRunning)
-            {
-                random.NextBytes(buffer);
-                using (var fs = new FileStream(tempFile, FileMode.Append, FileAccess.Write, FileShare.None, 4096))
-                {
-                    fs.Write(buffer, 0, buffer.Length);
-                }
-                Thread.Sleep(10);
-
-                if (File.Exists(tempFile) && new FileInfo(tempFile).Length > 50 * 1024 * 1024)
-                {
-                    File.Delete(tempFile);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[STRESS] Disk error: {ex.Message}");
-        }
-        finally
-        {
-            if (File.Exists(tempFile))
-            {
-                try { File.Delete(tempFile); }
-                catch { }
-            }
+            return _allocatedMemory.Sum(a => a.Length) / (1024.0 * 1024.0);
         }
     }
 
-    private static void CreateChildProcess()
+    private static async Task SendMessage(IpcMessage message)
+    {
+        if (_ipcClient != null)
+        {
+            await _ipcClient.SendMessageAsync(message);
+        }
+    }
+
+    private static void Cleanup()
     {
         try
         {
-            var childPipeName = $"{_pipeName}_Child_{Guid.NewGuid():N}";
-            var currentExe = Process.GetCurrentProcess().MainModule?.FileName
-                ?? System.Reflection.Assembly.GetExecutingAssembly().Location;
-
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = currentExe,
-                Arguments = childPipeName,
-                UseShellExecute = false,
-                CreateNoWindow = false
-            };
-
-            var child = Process.Start(startInfo);
-            if (child != null)
-            {
-                _childProcesses.Add(child);
-                Console.WriteLine($"[CHILD] Created child process: {child.Id}");
-            }
+            StopHighLoad();
+            FreeMemory();
+            _ipcClient?.Dispose();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[CHILD] Error: {ex.Message}");
+            Console.WriteLine($"Cleanup error: {ex.Message}");
         }
-    }
-
-    private static void StopAllStress()
-    {
-        _cpuStressRunning = false;
-        _memoryStressRunning = false;
-        _diskActivityRunning = false;
-
-        if (_cpuThread != null && _cpuThread.IsAlive)
-        {
-            _cpuThread.Join(2000);
-        }
-        if (_memoryThread != null && _memoryThread.IsAlive)
-        {
-            _memoryThread.Join(2000);
-        }
-        if (_diskThread != null && _diskThread.IsAlive)
-        {
-            _diskThread.Join(2000);
-        }
-
-        _allocatedMemory?.Clear();
-        _allocatedMemory = null;
-        GC.Collect();
-
-        Console.WriteLine("[STRESS] All stress tests stopped");
     }
 }

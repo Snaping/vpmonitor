@@ -59,10 +59,6 @@
               "target": "Package",
               "version": "[9.0.0, )"
             },
-            "System.IO.Pipes": {
-              "target": "Package",
-              "version": "[4.3.0, )"
-            },
             "System.Management": {
               "target": "Package",
               "version": "[9.0.0, )"
