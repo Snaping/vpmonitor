@@ -53,6 +53,12 @@ public partial class Form1 : Form
     private Process? _testProcess;
     private string _ipcPipeName = "VPMonitor_IPC_Pipe";
 
+    private ListView _lvSystemProcesses = null!;
+    private ListView _lvChildProcesses = null!;
+    private TextBox _txtProcessSearch = null!;
+    private Button _btnRefreshProcesses = null!;
+    private System.Windows.Forms.Timer _refreshTimer = null!;
+
     public Form1()
     {
         InitializeComponent();
@@ -74,12 +80,13 @@ public partial class Form1 : Form
             Enabled = false
         };
         _monitorTimer.Tick += MonitorTimer_Tick;
-    }
 
-    private void Form1_Load(object? sender, EventArgs e)
-    {
-        _logService.LogInfo("Application started");
-        UpdateUIState();
+        _refreshTimer = new System.Windows.Forms.Timer
+        {
+            Interval = 5000,
+            Enabled = true
+        };
+        _refreshTimer.Tick += RefreshTimer_Tick;
     }
 
     private void Form1_FormClosing(object? sender, FormClosingEventArgs e)
@@ -87,6 +94,7 @@ public partial class Form1 : Form
         try
         {
             _monitorTimer.Stop();
+            _refreshTimer?.Stop();
             _monitorService?.Dispose();
             _ipcService?.Dispose();
             _stressTestService.Dispose();
@@ -119,13 +127,14 @@ public partial class Form1 : Form
         var leftPanel = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            RowCount = 3,
+            RowCount = 4,
             ColumnCount = 1,
             Padding = new Padding(10)
         };
-        leftPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 33.33f));
-        leftPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 33.33f));
-        leftPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 33.33f));
+        leftPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 25f));
+        leftPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 25f));
+        leftPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 25f));
+        leftPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 25f));
         parent.Controls.Add(leftPanel);
 
         _cpuChart = CreateChart("CPU 使用率", "%", Color.FromArgb(52, 152, 219), 0, 100);
@@ -135,6 +144,7 @@ public partial class Form1 : Form
         leftPanel.Controls.Add(CreateChartPanel(_cpuChart, "CPU"), 0, 0);
         leftPanel.Controls.Add(CreateChartPanel(_memoryChart, "内存"), 0, 1);
         leftPanel.Controls.Add(CreateChartPanel(_diskChart, "磁盘"), 0, 2);
+        leftPanel.Controls.Add(BuildSystemProcessListPanel(), 0, 3);
     }
 
     private WaveformChart CreateChart(string title, string unit, Color color, double min, double max)
@@ -172,17 +182,68 @@ public partial class Form1 : Form
         return panel;
     }
 
+    private GroupBox BuildSystemProcessListPanel()
+    {
+        var groupBox = CreateGroupBox("系统进程列表 (双击监控)");
+        var panel = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 2,
+            ColumnCount = 3,
+            Padding = new Padding(5)
+        };
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80));
+
+        _txtProcessSearch = new TextBox { PlaceholderText = "搜索进程名...", Dock = DockStyle.Fill };
+        _txtProcessSearch.TextChanged += (s, e) => RefreshSystemProcessList();
+        panel.Controls.Add(_txtProcessSearch, 0, 0);
+
+        _btnRefreshProcesses = CreateButton("刷新", Color.FromArgb(52, 152, 219));
+        _btnRefreshProcesses.Click += (s, e) => RefreshSystemProcessList();
+        panel.Controls.Add(_btnRefreshProcesses, 1, 0);
+
+        var btnMonitor = CreateButton("监控选中", Color.FromArgb(46, 204, 113));
+        btnMonitor.Click += (s, e) => MonitorSelectedProcess();
+        panel.Controls.Add(btnMonitor, 2, 0);
+
+        _lvSystemProcesses = new ListView
+        {
+            Dock = DockStyle.Fill,
+            View = View.Details,
+            FullRowSelect = true,
+            MultiSelect = false,
+            GridLines = true,
+            Font = new Font("Arial", 8)
+        };
+        _lvSystemProcesses.Columns.Add("PID", 60);
+        _lvSystemProcesses.Columns.Add("进程名", 150);
+        _lvSystemProcesses.Columns.Add("CPU(%)", 60);
+        _lvSystemProcesses.Columns.Add("内存(MB)", 80);
+        _lvSystemProcesses.Columns.Add("线程数", 60);
+        _lvSystemProcesses.DoubleClick += (s, e) => MonitorSelectedProcess();
+        panel.Controls.Add(_lvSystemProcesses, 0, 1);
+        panel.SetColumnSpan(_lvSystemProcesses, 3);
+
+        groupBox.Controls.Add(panel);
+        return groupBox;
+    }
+
     private void BuildRightPanel(Control parent)
     {
         var rightPanel = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            RowCount = 5,
+            RowCount = 6,
             ColumnCount = 1,
             Padding = new Padding(5)
         };
-        rightPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 120));
-        rightPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 200));
+        rightPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 130));
+        rightPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 210));
+        rightPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 170));
         rightPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 130));
         rightPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 180));
         rightPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -190,9 +251,10 @@ public partial class Form1 : Form
 
         rightPanel.Controls.Add(BuildProcessStartPanel(), 0, 0);
         rightPanel.Controls.Add(BuildProcessInfoPanel(), 0, 1);
-        rightPanel.Controls.Add(BuildThresholdPanel(), 0, 2);
-        rightPanel.Controls.Add(BuildStressTestPanel(), 0, 3);
-        rightPanel.Controls.Add(BuildLogPanel(), 0, 4);
+        rightPanel.Controls.Add(BuildChildProcessListPanel(), 0, 2);
+        rightPanel.Controls.Add(BuildThresholdPanel(), 0, 3);
+        rightPanel.Controls.Add(BuildStressTestPanel(), 0, 4);
+        rightPanel.Controls.Add(BuildLogPanel(), 0, 5);
     }
 
     private GroupBox BuildProcessStartPanel()
@@ -289,6 +351,72 @@ public partial class Form1 : Form
         groupBox.Controls.Add(panel);
         groupBox.Controls.Add(buttonPanel);
         return groupBox;
+    }
+
+    private GroupBox BuildChildProcessListPanel()
+    {
+        var groupBox = CreateGroupBox("子进程列表");
+        var panel = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 2,
+            ColumnCount = 2,
+            Padding = new Padding(5)
+        };
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80));
+
+        var lblChildInfo = new Label { Text = "当前监控进程的子进程 (右键可操作)", AutoSize = true, Anchor = AnchorStyles.Left, Font = new Font("Arial", 8, FontStyle.Italic), ForeColor = Color.Gray };
+        panel.Controls.Add(lblChildInfo, 0, 0);
+
+        var btnRefreshChild = CreateButton("刷新", Color.FromArgb(52, 152, 219));
+        btnRefreshChild.Click += (s, e) => RefreshChildProcessList();
+        panel.Controls.Add(btnRefreshChild, 1, 0);
+
+        _lvChildProcesses = new ListView
+        {
+            Dock = DockStyle.Fill,
+            View = View.Details,
+            FullRowSelect = true,
+            MultiSelect = true,
+            GridLines = true,
+            Font = new Font("Arial", 8),
+            ContextMenuStrip = CreateChildProcessContextMenu()
+        };
+        _lvChildProcesses.Columns.Add("PID", 60);
+        _lvChildProcesses.Columns.Add("进程名", 120);
+        _lvChildProcesses.Columns.Add("状态", 60);
+        _lvChildProcesses.Columns.Add("内存(MB)", 70);
+        _lvChildProcesses.DoubleClick += (s, e) => AttachToSelectedChildProcess();
+        panel.Controls.Add(_lvChildProcesses, 0, 1);
+        panel.SetColumnSpan(_lvChildProcesses, 2);
+
+        groupBox.Controls.Add(panel);
+        return groupBox;
+    }
+
+    private ContextMenuStrip CreateChildProcessContextMenu()
+    {
+        var menu = new ContextMenuStrip();
+        var itemAttach = new ToolStripMenuItem("附加监控此子进程");
+        itemAttach.Click += (s, e) => AttachToSelectedChildProcess();
+        menu.Items.Add(itemAttach);
+
+        var itemSuspend = new ToolStripMenuItem("挂起");
+        itemSuspend.Click += (s, e) => SuspendSelectedChildProcess();
+        menu.Items.Add(itemSuspend);
+
+        var itemResume = new ToolStripMenuItem("恢复");
+        itemResume.Click += (s, e) => ResumeSelectedChildProcess();
+        menu.Items.Add(itemResume);
+
+        var itemTerminate = new ToolStripMenuItem("终止");
+        itemTerminate.Click += (s, e) => TerminateSelectedChildProcess();
+        menu.Items.Add(itemTerminate);
+
+        return menu;
     }
 
     private GroupBox BuildThresholdPanel()
@@ -868,6 +996,238 @@ public partial class Form1 : Form
             _lblThreadCount.Text = "-";
             _lblHandleCount.Text = "-";
             _lblChildCount.Text = "-";
+        }
+    }
+
+    private void RefreshTimer_Tick(object? sender, EventArgs e)
+    {
+        if (_monitorService == null)
+        {
+            RefreshSystemProcessList();
+        }
+        else
+        {
+            RefreshChildProcessList();
+        }
+    }
+
+    private void Form1_Load(object? sender, EventArgs e)
+    {
+        _logService.LogInfo("Application started");
+        RefreshSystemProcessList();
+        UpdateUIState();
+    }
+
+    private void RefreshSystemProcessList()
+    {
+        if (IsDisposed || _lvSystemProcesses == null) return;
+
+        Invoke(() =>
+        {
+            try
+            {
+                var searchText = _txtProcessSearch?.Text.Trim().ToLower() ?? string.Empty;
+                var processes = Process.GetProcesses()
+                    .Where(p => !string.IsNullOrEmpty(p.ProcessName))
+                    .Where(p => string.IsNullOrEmpty(searchText) || p.ProcessName.ToLower().Contains(searchText))
+                    .OrderByDescending(p => p.WorkingSet64)
+                    .Take(100);
+
+                _lvSystemProcesses.Items.Clear();
+
+                foreach (var p in processes)
+                {
+                    try
+                    {
+                        var item = new ListViewItem(p.Id.ToString());
+                        item.SubItems.Add(p.ProcessName);
+                        item.SubItems.Add("0.0");
+                        item.SubItems.Add((p.WorkingSet64 / (1024.0 * 1024.0)).ToString("F1"));
+                        item.SubItems.Add(p.Threads.Count.ToString());
+                        item.Tag = p.Id;
+                        _lvSystemProcesses.Items.Add(item);
+                    }
+                    catch { }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logService.LogError($"刷新进程列表失败: {ex.Message}");
+            }
+        });
+    }
+
+    private void MonitorSelectedProcess()
+    {
+        if (_lvSystemProcesses.SelectedItems.Count == 0)
+        {
+            MessageBox.Show("请先选择一个进程", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var tag = _lvSystemProcesses.SelectedItems[0].Tag;
+        if (tag == null) return;
+
+        var pid = (int)tag;
+        try
+        {
+            StopMonitoring();
+            _monitorService = new ProcessMonitorService(pid, _logService);
+            StartMonitoring();
+            _logService.LogInfo($"已附加到进程 PID={pid}", pid);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"附加进程失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void RefreshChildProcessList()
+    {
+        if (IsDisposed || _lvChildProcesses == null || _monitorService == null) return;
+
+        Invoke(() =>
+        {
+            try
+            {
+                var metrics = _monitorService.CurrentMetrics;
+                var childIds = metrics.ChildProcessIds ?? new List<int>();
+
+                _lvChildProcesses.Items.Clear();
+
+                foreach (var childId in childIds)
+                {
+                    try
+                    {
+                        var p = Process.GetProcessById(childId);
+                        var item = new ListViewItem(p.Id.ToString());
+                        item.SubItems.Add(p.ProcessName);
+                        item.SubItems.Add("运行中");
+                        item.SubItems.Add((p.WorkingSet64 / (1024.0 * 1024.0)).ToString("F1"));
+                        item.Tag = childId;
+                        _lvChildProcesses.Items.Add(item);
+                    }
+                    catch
+                    {
+                        var item = new ListViewItem(childId.ToString());
+                        item.SubItems.Add("未知");
+                        item.SubItems.Add("已退出");
+                        item.SubItems.Add("-");
+                        item.Tag = childId;
+                        _lvChildProcesses.Items.Add(item);
+                    }
+                }
+
+                if (childIds.Count == 0)
+                {
+                    var item = new ListViewItem("-");
+                    item.SubItems.Add("暂无子进程");
+                    item.SubItems.Add("-");
+                    item.SubItems.Add("-");
+                    _lvChildProcesses.Items.Add(item);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logService.LogError($"刷新子进程列表失败: {ex.Message}");
+            }
+        });
+    }
+
+    private void AttachToSelectedChildProcess()
+    {
+        if (_lvChildProcesses.SelectedItems.Count == 0) return;
+
+        var tag = _lvChildProcesses.SelectedItems[0].Tag;
+        if (tag == null) return;
+
+        var pid = (int)tag;
+        if (MessageBox.Show($"确定要切换监控到子进程 PID={pid} 吗？", "确认",
+            MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+        {
+            try
+            {
+                StopMonitoring();
+                _monitorService = new ProcessMonitorService(pid, _logService);
+                StartMonitoring();
+                _logService.LogInfo($"已切换监控到子进程 PID={pid}", pid);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"附加子进程失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+    }
+
+    private void SuspendSelectedChildProcess()
+    {
+        foreach (ListViewItem item in _lvChildProcesses.SelectedItems)
+        {
+            var tag = item.Tag;
+            if (tag == null) continue;
+
+            var pid = (int)tag;
+            try
+            {
+                using var p = Process.GetProcessById(pid);
+                ProcessHelper.SuspendProcess(p);
+                _logService.LogInfo($"已挂起子进程 PID={pid}", pid);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"挂起子进程 PID={pid} 失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+        RefreshChildProcessList();
+    }
+
+    private void ResumeSelectedChildProcess()
+    {
+        foreach (ListViewItem item in _lvChildProcesses.SelectedItems)
+        {
+            var tag = item.Tag;
+            if (tag == null) continue;
+
+            var pid = (int)tag;
+            try
+            {
+                using var p = Process.GetProcessById(pid);
+                ProcessHelper.ResumeProcess(p);
+                _logService.LogInfo($"已恢复子进程 PID={pid}", pid);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"恢复子进程 PID={pid} 失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+        RefreshChildProcessList();
+    }
+
+    private void TerminateSelectedChildProcess()
+    {
+        if (_lvChildProcesses.SelectedItems.Count == 0) return;
+
+        if (MessageBox.Show($"确定要终止选中的 {_lvChildProcesses.SelectedItems.Count} 个子进程吗？此操作不可撤销。", "确认",
+            MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
+        {
+            foreach (ListViewItem item in _lvChildProcesses.SelectedItems)
+            {
+                var tag = item.Tag;
+                if (tag == null) continue;
+
+                var pid = (int)tag;
+                try
+                {
+                    using var p = Process.GetProcessById(pid);
+                    ProcessHelper.TerminateProcess(p);
+                    _logService.LogInfo($"已终止子进程 PID={pid}", pid);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"终止子进程 PID={pid} 失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            RefreshChildProcessList();
         }
     }
 }
