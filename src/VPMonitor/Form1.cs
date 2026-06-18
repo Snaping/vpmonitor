@@ -1013,6 +1013,14 @@ public partial class Form1 : Form
     {
         try
         {
+            if (_monitorService != null && ProcessHelper.IsCurrentProcess(_monitorService.CurrentMetrics.ProcessId))
+            {
+                var result = MessageBox.Show(
+                    "检测到正在监控自身进程！挂起自身进程时将跳过UI线程以避免应用无响应。\n\n是否继续？",
+                    "安全警告", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                if (result != DialogResult.Yes) return;
+            }
+
             _monitorService?.SuspendProcess();
             UpdateUIState();
         }
@@ -1037,6 +1045,14 @@ public partial class Form1 : Form
 
     private void BtnTerminate_Click(object? sender, EventArgs e)
     {
+        if (_monitorService != null && ProcessHelper.IsCurrentProcess(_monitorService.CurrentMetrics.ProcessId))
+        {
+            MessageBox.Show(
+                "无法终止自身进程！此操作将导致监控工具关闭。\n如需退出，请直接关闭应用程序窗口。",
+                "操作禁止", MessageBoxButtons.OK, MessageBoxIcon.Stop);
+            return;
+        }
+
         if (MessageBox.Show("确定要终止该进程吗？此操作不可撤销。", "确认",
             MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
         {

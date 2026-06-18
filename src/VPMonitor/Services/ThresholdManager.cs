@@ -120,6 +120,8 @@ public class ThresholdManager
     {
         if (action == ThresholdAction.None) return;
 
+        bool isSelf = ProcessHelper.IsCurrentProcess(metrics.ProcessId);
+
         try
         {
             switch (action)
@@ -132,6 +134,13 @@ public class ThresholdManager
                     break;
 
                 case ThresholdAction.Suspend:
+                    if (isSelf)
+                    {
+                        _logService.LogWarning(
+                            $"Skipped auto-suspend on self-process to prevent UI freeze ({thresholdType} threshold violation)",
+                            metrics.ProcessId, metrics.ProcessName);
+                        return;
+                    }
                     _monitorService.SuspendProcess();
                     _logService.LogActionTaken(
                         $"Auto-suspended process due to {thresholdType} threshold violation",
@@ -139,6 +148,13 @@ public class ThresholdManager
                     break;
 
                 case ThresholdAction.Terminate:
+                    if (isSelf)
+                    {
+                        _logService.LogWarning(
+                            $"Skipped auto-terminate on self-process to prevent application exit ({thresholdType} threshold violation)",
+                            metrics.ProcessId, metrics.ProcessName);
+                        return;
+                    }
                     _monitorService.TerminateProcess();
                     _logService.LogActionTaken(
                         $"Auto-terminated process due to {thresholdType} threshold violation",

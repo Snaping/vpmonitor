@@ -31,6 +31,12 @@ public static class ProcessHelper
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern uint GetPriorityClass(IntPtr hProcess);
 
+    [DllImport("kernel32.dll")]
+    private static extern uint GetCurrentThreadId();
+
+    [DllImport("kernel32.dll")]
+    private static extern uint GetCurrentProcessId();
+
     private const uint NORMAL_PRIORITY_CLASS = 0x0020;
     private const uint IDLE_PRIORITY_CLASS = 0x0040;
     private const uint HIGH_PRIORITY_CLASS = 0x0080;
@@ -38,13 +44,29 @@ public static class ProcessHelper
     private const uint BELOW_NORMAL_PRIORITY_CLASS = 0x4000;
     private const uint ABOVE_NORMAL_PRIORITY_CLASS = 0x8000;
 
+    public static bool IsCurrentProcess(int pid)
+    {
+        return pid == GetCurrentProcessId();
+    }
+
+    public static bool IsCurrentProcess(Process process)
+    {
+        return process.Id == GetCurrentProcessId();
+    }
+
     public static void SuspendProcess(Process process)
     {
         if (process == null || process.HasExited)
             throw new ArgumentException("Process is not valid");
 
+        bool isSelf = IsCurrentProcess(process);
+        uint currentThreadId = GetCurrentThreadId();
+
         foreach (ProcessThread thread in process.Threads)
         {
+            if (isSelf && (uint)thread.Id == currentThreadId)
+                continue;
+
             IntPtr hThread = OpenThread(ThreadAccess.SUSPEND_RESUME, false, (uint)thread.Id);
             if (hThread == IntPtr.Zero)
                 continue;
@@ -65,8 +87,14 @@ public static class ProcessHelper
         if (process == null || process.HasExited)
             throw new ArgumentException("Process is not valid");
 
+        bool isSelf = IsCurrentProcess(process);
+        uint currentThreadId = GetCurrentThreadId();
+
         foreach (ProcessThread thread in process.Threads)
         {
+            if (isSelf && (uint)thread.Id == currentThreadId)
+                continue;
+
             IntPtr hThread = OpenThread(ThreadAccess.SUSPEND_RESUME, false, (uint)thread.Id);
             if (hThread == IntPtr.Zero)
                 continue;
